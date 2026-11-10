@@ -2,6 +2,8 @@
 
 Paste a product idea. Get pull requests.
 
+![Software factory](docs/factory2.png)
+
 This is a local factory for [omp](https://omp.sh). You stay on one board. The factory researches the repo, writes tickets, and runs each ticket through spec, build, checks, review, and approve. You press the buttons that matter. It does not deploy.
 
 ## You need
