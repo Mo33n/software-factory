@@ -1,0 +1,7 @@
+/factory/jobs/
+/factory/programs/
+/factory/probe-results.json
+/.worktrees/
+.DS_Store
+__pycache__/
+*.pyc
