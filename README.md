@@ -94,7 +94,25 @@ python3 factory/bin/run status
 
 ## Install it into a repo
 
-See [INSTALL.md](INSTALL.md). Copy the `factory/` scripts in, point `checks.sh` at the real tests, and set the models. [DESIGN.md](DESIGN.md) is the long version of how the pieces fit.
+From the root of a project that already has a GitHub `origin`:
+
+```bash
+git clone --depth 1 https://github.com/Mo33n/software-factory.git /tmp/software-factory
+rm -rf factory
+cp -R /tmp/software-factory/factory ./factory
+mkdir -p .omp/commands
+cp /tmp/software-factory/.omp/commands/factory.md .omp/commands/factory.md
+chmod +x factory/checks.sh factory/accept.sh factory/bin/*
+rm -rf /tmp/software-factory
+```
+
+Then point `factory/checks.sh` at this repo's tests, set `models` in `factory/config.json` from `omp models`, and add the factory labels. For a web app, set `page.start` and install `agent-browser`. The checklist, gitignore lines, and the verify commands are in [INSTALL.md](INSTALL.md). [DESIGN.md](DESIGN.md) is how the pieces fit.
+
+```bash
+python3 factory/bin/board
+```
+
+Open http://127.0.0.1:8000/ and paste a PRD. Restart omp once so `/factory` shows up.
 
 ## License
 
