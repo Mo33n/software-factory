@@ -41,6 +41,19 @@ TOOLS = {
 
 ROLES_NO_SKILLS = {"intake"}
 
+# A role that exits 0 without its file is not done. Review files live in the
+# round directory; the others live in the job directory.
+OUTPUTS = {
+    "intake": "intake.md",
+    "spec-writer": "spec.md",
+    "builder": "build.md",
+    "approver": "decision.md",
+    "reviewer-code": "review-code.md",
+    "reviewer-security": "review-security.md",
+    "reviewer-ux": "review-ux.md",
+    "reviewer-ui": "review-ui.md",
+}
+
 
 def die(msg):
     print(f"agent: {msg}", file=sys.stderr)
@@ -79,6 +92,39 @@ def header(job):
     )
 
 
+def output_path(job, role):
+    name = OUTPUTS.get(role)
+    if not name:
+        return None
+    folder = job_dir(job["id"])
+    if role.startswith("reviewer-"):
+        return folder / f"round-{job.get('round') or 0}" / name
+    return folder / name
+
+
+def output_ready(path):
+    """The file the next stage will require, not merely a non-empty file."""
+    if path is None:
+        return True
+    if not path.exists():
+        return False
+    text = path.read_text().strip()
+    if not text:
+        return False
+    name = path.name
+    if name == "decision.md":
+        return text.splitlines()[0].strip() in {"APPROVE", "ESCALATE"}
+    if name == "build.md":
+        first = text.splitlines()[0].strip()
+        return first in {"STATUS: READY", "STATUS: BLOCKED"}
+    if name == "intake.md":
+        head = text.split("\n\n", 1)[0]
+        return any(line.startswith("DECISION:") for line in head.splitlines())
+    if name.startswith("review-"):
+        return "VERDICT:" in text
+    return len(text) >= 80
+
+
 def spawn(job, role, prompt, model, resume):
     omp = CONFIG.get("omp", {}).get("bin", "omp")
     if not shutil.which(omp) and not Path(omp).exists():
@@ -113,16 +159,33 @@ def spawn(job, role, prompt, model, resume):
         cmd += ["--config", str(overlay)]
     if role in ROLES_NO_SKILLS:
         cmd += ["--no-skills"]
-    if resume:
-        cmd.append("--continue")
-    cmd.append(prompt)
 
     env = os.environ.copy()
     env.setdefault("PI_NO_PTY", "1")
-    code = factorylog.run(cmd, log_path, cwd=REPO, env=env, session_dir=session_dir)
-    if code != 0:
-        die(f"omp exited {code} for {role} on {job['id']}. See {log_path}")
-    print(f"{job['id']}: {role} done ({model})", flush=True)
+    path = output_path(job, role)
+    attempts = [resume, False]
+    for attempt, use_resume in enumerate(attempts, start=1):
+        run_cmd = list(cmd)
+        run_prompt = prompt
+        if attempt > 1:
+            run_prompt += (
+                f"\n\nThe previous session exited without a usable {path.name}. "
+                "Write that file in the job folder now. Do not stop until it is on disk."
+            )
+        if use_resume:
+            run_cmd.append("--continue")
+        run_cmd.append(run_prompt)
+        code = factorylog.run(run_cmd, log_path, cwd=REPO, env=env, session_dir=session_dir)
+        if code != 0:
+            die(f"omp exited {code} for {role} on {job['id']}. See {log_path}")
+        if output_ready(path):
+            print(f"{job['id']}: {role} done ({model})", flush=True)
+            return
+        print(
+            f"{job['id']}: {role} exited 0 without {path.name}; retry {attempt}",
+            flush=True,
+        )
+    die(f"{role} on {job['id']} exited 0 without a usable {path.name}. See {log_path}")
 
 
 def main(argv):
